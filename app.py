@@ -2,7 +2,7 @@ from flask import Flask, render_template, redirect, url_for, request, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import os
 from dotenv import load_dotenv
 import firebase_admin
@@ -27,10 +27,25 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 # Initialize Firebase
+cred_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
 cred_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH', 'Google-auth-team-task-manager.json')
-if os.path.exists(cred_path):
+
+if cred_json:
+    import json
+    import tempfile
+    # Create a temporary file to store the JSON for the Firebase SDK
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tf:
+        tf.write(cred_json)
+        temp_cred_path = tf.name
+    cred = credentials.Certificate(temp_cred_path)
+    firebase_admin.initialize_app(cred)
+    print("Firebase initialized using environment variable JSON.")
+elif os.path.exists(cred_path):
     cred = credentials.Certificate(cred_path)
     firebase_admin.initialize_app(cred)
+    print(f"Firebase initialized using file: {cred_path}")
+else:
+    print("WARNING: Firebase credentials not found. Google Auth will not work.")
 
 # --- Models ---
 class User(UserMixin, db.Model):
@@ -65,7 +80,7 @@ class ActivityLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     action = db.Column(db.String(255), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     user = db.relationship('User', backref='activities', lazy=True)
 
@@ -148,7 +163,13 @@ def logout():
 @app.route('/google-auth', methods=['POST'])
 def google_auth():
     if not firebase_admin._apps:
-        return jsonify({'success': False, 'error': 'Firebase Admin SDK not initialized on server.'}), 500
+        # Try to re-initialize if not initialized
+        cred_path = os.environ.get('FIREBASE_SERVICE_ACCOUNT_PATH', 'Google-auth-team-task-manager.json')
+        if os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+        else:
+            return jsonify({'success': False, 'error': 'Firebase Admin SDK not initialized and service account file missing.'}), 500
         
     data = request.get_json()
     id_token = data.get('idToken')
