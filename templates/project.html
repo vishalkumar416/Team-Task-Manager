@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <a href="{{ url_for('dashboard') }}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+        &larr; Back to Dashboard
+    </a>
+    <h2>Project: {{ project.name }}</h2>
+    {% if project.description %}
+    <p style="color: var(--text-muted); margin-top: 8px;">{{ project.description }}</p>
+    {% endif %}
+</div>
+
+<div class="grid-2">
+    <div class="glass-panel">
+        <h3 style="margin-bottom: 16px;">Project Tasks</h3>
+        {% if project.tasks %}
+            <ul class="project-list">
+                {% for task in project.tasks %}
+                <li class="project-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <strong>{{ task.title }}</strong>
+                        <span class="badge 
+                            {% if task.status == 'To Do' %}badge-todo{% elif task.status == 'In Progress' %}badge-progress{% else %}badge-done{% endif %}
+                        ">{{ task.status }}</span>
+                    </div>
+                    {% if task.description %}
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">{{ task.description }}</p>
+                    {% endif %}
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
+                        <div>
+                            <span>Assignee: {{ task.assignee.username if task.assignee else 'Unassigned' }}</span>
+                            {% if not task.assignee %}
+                            <form method="POST" action="{{ url_for('assign_to_me', task_id=task.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-sm" style="background: var(--primary-color); color: white; padding: 2px 8px; margin-left: 8px; font-size: 0.75rem;">Assign to me</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% if task.due_date %}
+                            <span>Due: {{ task.due_date.strftime('%b %d, %Y') }}</span>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p style="color: var(--text-muted); text-align: center; padding: 20px;">No tasks created for this project yet.</p>
+        {% endif %}
+    </div>
+
+    {% if current_user.role == 'Admin' %}
+    <div class="glass-panel">
+        <h3 style="margin-bottom: 16px;">Create Task</h3>
+        <form method="POST" action="{{ url_for('create_task', project_id=project.id) }}">
+            <div class="form-group">
+                <label>Task Title</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" name="due_date" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Assign To</label>
+                <select name="assigned_to" class="form-control">
+                    <option value="">Unassigned</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }} ({{ user.role }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Create Task</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="glass-panel">
+        <h3 style="margin-bottom: 16px;">Task Creation</h3>
+        <p style="color: var(--text-muted);">Only Admins can create tasks for projects. If you need a task created, please contact an administrator.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

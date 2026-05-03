@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <h2>Dashboard</h2>
+    <div style="color: var(--text-muted);">
+        {% if current_user.role == 'Admin' %}
+            You have full access to all projects and tasks.
+        {% else %}
+            Here are your assigned tasks.
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid-3" style="margin-bottom: 32px;">
+    <div class="glass-panel stat-card">
+        <h3>Total Projects</h3>
+        <div class="value">{{ projects|length }}</div>
+    </div>
+    <div class="glass-panel stat-card">
+        <h3>Tasks Assigned</h3>
+        <div class="value">{{ tasks|length }}</div>
+    </div>
+    <div class="glass-panel stat-card" style="border-color: var(--accent-red);">
+        <h3>Overdue Tasks</h3>
+        <div class="value" style="color: var(--accent-red);">{{ overdue_tasks|length }}</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div>
+        <div class="glass-panel" style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3>Projects</h3>
+            </div>
+            
+            {% if current_user.role == 'Admin' %}
+            <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color);">
+                <form method="POST" action="{{ url_for('create_project') }}" class="inline-form">
+                    <input type="text" name="name" class="form-control" placeholder="New Project Name" required>
+                    <button type="submit" class="btn btn-primary btn-sm">Create</button>
+                </form>
+            </div>
+            {% endif %}
+
+            {% if projects %}
+                <ul class="project-list">
+                    {% for project in projects %}
+                    <li class="project-item">
+                        <div>
+                            <strong>{{ project.name }}</strong>
+                            <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                {% set completed = project.tasks | selectattr("status", "equalto", "Done") | list | length %}
+                                {% set total = project.tasks | length %}
+                                {{ total }} tasks {% if total > 0 %}- {{ (completed / total * 100) | round | int }}% completed{% endif %}
+                            </div>
+                        </div>
+                        <a href="{{ url_for('project_details', project_id=project.id) }}" class="btn btn-sm" style="background: rgba(255,255,255,0.1); color: white;">View</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p style="color: var(--text-muted); text-align: center; padding: 20px;">No projects found.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div>
+        <div class="glass-panel">
+            <h3>Your Recent Tasks</h3>
+            {% if tasks %}
+                <ul class="project-list" style="margin-top: 16px;">
+                    {% for task in tasks[:5] %}
+                    <li class="project-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <strong>{{ task.title }}</strong>
+                            <span class="badge 
+                                {% if task.status == 'To Do' %}badge-todo{% elif task.status == 'In Progress' %}badge-progress{% else %}badge-done{% endif %}
+                            ">{{ task.status }}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 0.85rem; color: var(--text-muted);">
+                            <span>Project: {{ task.project.name }}</span>
+                            {% if task.due_date %}
+                                <span class="{% if task in overdue_tasks %}badge badge-overdue{% endif %}">
+                                    Due: {{ task.due_date.strftime('%b %d, %Y') }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div style="text-align: center; margin-top: 16px;">
+                    <a href="#taskboard">View all on task board ↓</a>
+                </div>
+            {% else %}
+                <p style="color: var(--text-muted); text-align: center; padding: 20px;">No tasks assigned.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<h2 id="taskboard" style="margin-top: 40px; margin-bottom: 16px;">Task Board</h2>
+<div class="task-board">
+    <div class="task-column">
+        <h3>To Do <span class="badge badge-todo">{{ to_do|length }}</span></h3>
+        {% for task in to_do %}
+            <div class="task-card">
+                <h4>{{ task.title }}</h4>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">{{ task.description or 'No description' }}</p>
+                
+                <form method="POST" action="{{ url_for('update_task', task_id=task.id) }}">
+                    <select name="status" class="form-control" style="padding: 4px; font-size: 0.85rem; margin-bottom: 12px;" onchange="this.form.submit()">
+                        <option value="To Do" selected>To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </form>
+
+                <div class="task-meta">
+                    <span>{{ task.project.name }}</span>
+                    {% if task.due_date %}<span>{{ task.due_date.strftime('%b %d') }}</span>{% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="task-column">
+        <h3>In Progress <span class="badge badge-progress">{{ in_progress|length }}</span></h3>
+        {% for task in in_progress %}
+            <div class="task-card" style="border-left: 3px solid var(--primary-color);">
+                <h4>{{ task.title }}</h4>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">{{ task.description or 'No description' }}</p>
+                
+                <form method="POST" action="{{ url_for('update_task', task_id=task.id) }}">
+                    <select name="status" class="form-control" style="padding: 4px; font-size: 0.85rem; margin-bottom: 12px;" onchange="this.form.submit()">
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress" selected>In Progress</option>
+                        <option value="Done">Done</option>
+                    </select>
+                </form>
+
+                <div class="task-meta">
+                    <span>{{ task.project.name }}</span>
+                    {% if task.due_date %}<span>{{ task.due_date.strftime('%b %d') }}</span>{% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="task-column">
+        <h3>Done <span class="badge badge-done">{{ done|length }}</span></h3>
+        {% for task in done %}
+            <div class="task-card" style="border-left: 3px solid var(--accent-green); opacity: 0.7;">
+                <h4 style="text-decoration: line-through;">{{ task.title }}</h4>
+                
+                <form method="POST" action="{{ url_for('update_task', task_id=task.id) }}">
+                    <select name="status" class="form-control" style="padding: 4px; font-size: 0.85rem; margin-bottom: 12px;" onchange="this.form.submit()">
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done" selected>Done</option>
+                    </select>
+                </form>
+
+                <div class="task-meta">
+                    <span>{{ task.project.name }}</span>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="grid-2" style="margin-top: 40px; margin-bottom: 40px;">
+    <div class="glass-panel">
+        <h3>Task Analytics</h3>
+        <canvas id="taskChart" style="max-height: 300px; margin-top: 16px;"></canvas>
+    </div>
+    
+    <div class="glass-panel">
+        <h3>Recent Activity Log (Audit Trail)</h3>
+        <ul style="list-style: none; margin-top: 16px;">
+            {% for log in recent_activities %}
+            <li style="margin-bottom: 16px; font-size: 0.9rem; border-left: 2px solid var(--primary-color); padding-left: 12px;">
+                <strong style="color: white;">{{ log.user.username }}</strong> <span style="color: var(--text-muted);">{{ log.action }}</span>
+                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 4px;">{{ log.timestamp.strftime('%b %d, %H:%M') }}</div>
+            </li>
+            {% else %}
+            <p style="color: var(--text-muted); font-size: 0.85rem;">No recent activity.</p>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('taskChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['To Do', 'In Progress', 'Done'],
+            datasets: [{
+                data: [{{ to_do|length }}, {{ in_progress|length }}, {{ done|length }}],
+                backgroundColor: [
+                    'rgba(148, 163, 184, 0.5)',
+                    'rgba(99, 102, 241, 0.5)',
+                    'rgba(16, 185, 129, 0.5)'
+                ],
+                borderColor: [
+                    'rgba(148, 163, 184, 1)',
+                    'rgba(99, 102, 241, 1)',
+                    'rgba(16, 185, 129, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#f8fafc' }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
